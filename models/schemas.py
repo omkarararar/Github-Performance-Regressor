@@ -21,3 +21,18 @@ class Finding(BaseModel):
     explanation: str
     suggested_fix: str
     severity: Optional[str] = None
+
+class ASTNode(BaseModel):
+    type: str           # "function", "class", "loop", "async"
+    name: str           # e.g. "get_users", "UserModel", "for"
+    start_line: int
+    end_line: int
+    snippet: str
+
+class EnrichedFileChange(BaseModel):
+    filename: str
+    language: str
+    hunks: str
+    added_lines: list[str]
+    ast_nodes: list[ASTNode]
+    line_to_nodes: dict[int, list[str]]

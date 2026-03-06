@@ -1,8 +1,12 @@
 # GitHub Performance Regressor — Project Context
 
+## Project Goal
+
+**Production-grade** automated GitHub PR performance analysis bot — targeting resume-quality for **FAANG / Stripe / Atlassian / Atlan** level roles. Every node must be robust, well-tested, and handle edge cases. Not an MVP — this is a polished, deployable system.
+
 ## What Is This?
 
-An automated **GitHub PR performance analysis bot** that reviews pull requests for performance regressions (N+1 queries, blocking calls, unbounded queries, etc.) and posts inline review comments.
+An automated bot that reviews pull requests for performance regressions (N+1 queries, blocking calls, unbounded queries, etc.) and posts inline review comments on GitHub PRs.
 
 ---
 
@@ -62,13 +66,15 @@ Github Performance Regressor/
 │   ├── __init__.py
 │   └── schemas.py          # Pydantic models: FileChange, SuspectedPattern, Finding
 │
-├── nodes/                  # Pipeline nodes (to be built)
-│   └── __init__.py
+├── nodes/
+│   ├── __init__.py
+│   └── diff_fetcher.py     # Node 1 — fetches PR diff, parses per-file, filters noise
 │
 ├── prompts/                # LLM prompt templates (to be built)
 │
 └── tests/
-    └── __init__.py
+    ├── __init__.py
+    └── test_diff_fetcher.py  # Node 1 tests (all passing ✅)
 ```
 
 ---
@@ -92,12 +98,22 @@ Github Performance Regressor/
 ## What's Built ✅
 - [x] Project scaffolding (folders, __init__.py files)
 - [x] `config.py` — env var loading
-- [x] `models/schemas.py` — data models
+- [x] `models/schemas.py` — Pydantic data models
 - [x] `main.py` — FastAPI server (tested, runs on port 8000)
 - [x] `requirements.txt` — all deps installed
+- [x] `nodes/diff_fetcher.py` — Node 1 basic implementation (tested ✅)
+- [x] `tests/test_diff_fetcher.py` — Node 1 tests (parse_diff, should_skip, get_language)
+
+## Node 1 Enhancements Needed (before production)
+- [ ] **Line number tracking** — map each added line to its actual line number in the file (Node 6 needs this for inline PR comments)
+- [ ] **Full file content fetching** — Node 2 (Tree-sitter) needs the entire file, not just the diff. Add a second API call to fetch file contents.
+- [ ] **Pagination** — GitHub caps diffs at ~3000 lines / 300 files. Handle large PRs.
+- [ ] **Renamed file detection** — handle `rename from/to` markers in diffs
+- [ ] **Binary file handling** — skip `Binary files differ` entries gracefully
+- [ ] **Rate limiting + retries** — GitHub API has rate limits (5000 req/hr). Add retry logic with exponential backoff.
+- [ ] **Error handling** — graceful failures for 404 (bad PR), 403 (no access), network errors
 
 ## What's Next ⬜
-- [ ] `nodes/diff_fetcher.py` — Node 1 (GitHub API + diff parsing)
 - [ ] `nodes/parser.py` — Node 2 (Tree-sitter AST)
 - [ ] `nodes/pattern_matcher.py` — Node 3 (rule-based detection)
 - [ ] `nodes/llm_analyzer.py` — Node 4 (Claude integration)
@@ -105,4 +121,6 @@ Github Performance Regressor/
 - [ ] `nodes/responder.py` — Node 6 (PR comment posting)
 - [ ] Wire pipeline in `main.py`
 - [ ] `prompts/analyzer_prompt.txt` — Claude prompt template
+- [ ] Harden Node 1 (line numbers, pagination, retries, full file fetch)
 - [ ] End-to-end testing on a real PR
+- [ ] Deploy as GitHub App
