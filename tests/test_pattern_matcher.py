@@ -20,7 +20,8 @@ def test_orm_in_loop():
 +for user in users:
 +    user.objects.filter(active=True)"""
 
-    ef = make_enriched("app.py", hunks, line_to_nodes={2: ["loop", "function"]})
+    # Line 3 in the matcher (index 2 in loop, +1)
+    ef = make_enriched("app.py", hunks, line_to_nodes={3: ["loop", "function"]})
     results = match_patterns(ef)
 
     matched = [r for r in results if r.suspected_pattern == "ORM call inside loop"]
@@ -33,7 +34,7 @@ def test_orm_outside_loop_ignored():
     hunks = """@@ -1,3 +1,3 @@
 +users = User.objects.filter(active=True)"""
 
-    ef = make_enriched("app.py", hunks, line_to_nodes={1: ["function"]})
+    ef = make_enriched("app.py", hunks, line_to_nodes={2: ["function"]})
     results = match_patterns(ef)
 
     matched = [r for r in results if r.suspected_pattern == "ORM call inside loop"]
@@ -46,7 +47,7 @@ def test_blocking_in_async():
     hunks = """@@ -1,3 +1,3 @@
 +    time.sleep(5)"""
 
-    ef = make_enriched("app.py", hunks, line_to_nodes={1: ["async"]})
+    ef = make_enriched("app.py", hunks, line_to_nodes={2: ["async"]})
     results = match_patterns(ef)
 
     matched = [r for r in results if r.suspected_pattern == "Blocking call in async"]
@@ -59,7 +60,7 @@ def test_blocking_outside_async_ignored():
     hunks = """@@ -1,3 +1,3 @@
 +    time.sleep(5)"""
 
-    ef = make_enriched("app.py", hunks, line_to_nodes={1: ["function"]})
+    ef = make_enriched("app.py", hunks, line_to_nodes={2: ["function"]})
     results = match_patterns(ef)
 
     matched = [r for r in results if r.suspected_pattern == "Blocking call in async"]
@@ -83,7 +84,7 @@ def test_unbounded_query():
 def test_unbounded_with_limit_ignored():
     """Unbounded .all() followed by .limit() nearby should be ignored."""
     hunks = """@@ -1,3 +1,3 @@
-+    results = db.all().limit(100)"""
++    results = collection.all().limit(100)"""
 
     ef = make_enriched("app.py", hunks)
     results = match_patterns(ef)

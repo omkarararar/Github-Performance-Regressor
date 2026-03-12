@@ -58,23 +58,34 @@ Github Performance Regressor/
 ├── .gitignore
 ├── aim.md                  # Original pipeline design doc
 ├── config.py               # Loads env vars via python-dotenv
-├── main.py                 # FastAPI entry point with /webhook endpoint
+├── main.py                 # FastAPI entry point — wires all 6 nodes + webhook signature verification
 ├── requirements.txt        # Python dependencies
 ├── context.md              # This file
 │
 ├── models/
 │   ├── __init__.py
-│   └── schemas.py          # Pydantic models: FileChange, SuspectedPattern, Finding
+│   └── schemas.py          # Pydantic models: FileChange, SuspectedPattern, Finding, ASTNode, EnrichedFileChange
 │
 ├── nodes/
 │   ├── __init__.py
-│   └── diff_fetcher.py     # Node 1 — fetches PR diff, parses per-file, filters noise
+│   ├── diff_fetcher.py     # Node 1 — fetches PR diff, parses per-file, filters noise
+│   ├── parser.py           # Node 2 — Tree-sitter AST extraction (functions, classes, loops, async)
+│   ├── pattern_matcher.py  # Node 3 — rule-based detection of 6 anti-patterns
+│   ├── llm_analyzer.py     # Node 4 — sends suspects to Claude for confirmation
+│   ├── severity_scorer.py  # Node 5 — scores findings as High/Medium/Low
+│   └── responder.py        # Node 6 — posts inline PR comments + summary + commit status
 │
-├── prompts/                # LLM prompt templates (to be built)
+├── prompts/
+│   └── analyzer_prompt.txt # Claude prompt template for performance analysis
 │
 └── tests/
     ├── __init__.py
-    └── test_diff_fetcher.py  # Node 1 tests (all passing ✅)
+    ├── test_diff_fetcher.py    # Node 1 tests ✅
+    ├── test_parser.py          # Node 2 tests ✅
+    ├── test_pattern_matcher.py # Node 3 tests ✅
+    ├── test_llm_analyzer.py    # Node 4 tests ✅
+    ├── test_severity_scorer.py # Node 5 tests ✅
+    └── test_responder.py       # Node 6 tests ✅
 ```
 
 ---
@@ -98,29 +109,22 @@ Github Performance Regressor/
 ## What's Built ✅
 - [x] Project scaffolding (folders, __init__.py files)
 - [x] `config.py` — env var loading
-- [x] `models/schemas.py` — Pydantic data models
-- [x] `main.py` — FastAPI server (tested, runs on port 8000)
-- [x] `requirements.txt` — all deps installed
-- [x] `nodes/diff_fetcher.py` — Node 1 basic implementation (tested ✅)
-- [x] `tests/test_diff_fetcher.py` — Node 1 tests (parse_diff, should_skip, get_language)
+- [x] `models/schemas.py` — Pydantic data models (FileChange, SuspectedPattern, Finding, ASTNode, EnrichedFileChange)
+- [x] `main.py` — Full pipeline wiring with webhook signature verification
+- [x] `requirements.txt` — all deps installed (tree-sitter 0.25.0)
+- [x] `nodes/diff_fetcher.py` — Node 1 (tested ✅)
+- [x] `nodes/parser.py` — Node 2 Tree-sitter AST extraction (tested ✅)
+- [x] `nodes/pattern_matcher.py` — Node 3 rule-based detection of 6 anti-patterns (tested ✅)
+- [x] `nodes/llm_analyzer.py` — Node 4 Claude integration with response parsing (tested ✅)
+- [x] `nodes/severity_scorer.py` — Node 5 severity scoring (tested ✅)
+- [x] `nodes/responder.py` — Node 6 PR comment posting + summary (tested ✅)
+- [x] `prompts/analyzer_prompt.txt` — Claude prompt template
+- [x] All 6 test suites passing (26 total tests)
 
-## Node 1 Enhancements Needed (before production)
-- [ ] **Line number tracking** — map each added line to its actual line number in the file (Node 6 needs this for inline PR comments)
-- [ ] **Full file content fetching** — Node 2 (Tree-sitter) needs the entire file, not just the diff. Add a second API call to fetch file contents.
-- [ ] **Pagination** — GitHub caps diffs at ~3000 lines / 300 files. Handle large PRs.
-- [ ] **Renamed file detection** — handle `rename from/to` markers in diffs
-- [ ] **Binary file handling** — skip `Binary files differ` entries gracefully
-- [ ] **Rate limiting + retries** — GitHub API has rate limits (5000 req/hr). Add retry logic with exponential backoff.
-- [ ] **Error handling** — graceful failures for 404 (bad PR), 403 (no access), network errors
-
-## What's Next ⬜
-- [ ] `nodes/parser.py` — Node 2 (Tree-sitter AST)
-- [ ] `nodes/pattern_matcher.py` — Node 3 (rule-based detection)
-- [ ] `nodes/llm_analyzer.py` — Node 4 (Claude integration)
-- [ ] `nodes/severity_scorer.py` — Node 5 (scoring logic)
-- [ ] `nodes/responder.py` — Node 6 (PR comment posting)
-- [ ] Wire pipeline in `main.py`
-- [ ] `prompts/analyzer_prompt.txt` — Claude prompt template
+## What's Next ⬜ (Phase 2 — Production Hardening)
+- [ ] End-to-end test on a real PR
+- [ ] Deploy webhook (ngrok/smee.io + GitHub App)
 - [ ] Harden Node 1 (line numbers, pagination, retries, full file fetch)
-- [ ] End-to-end testing on a real PR
-- [ ] Deploy as GitHub App
+- [ ] Harden all nodes (error handling, logging, rate limiting)
+- [ ] CI/CD pipeline
+- [ ] README with architecture diagram

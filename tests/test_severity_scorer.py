@@ -29,11 +29,11 @@ def test_high_severity():
 
 
 def test_medium_severity():
-    """Finding not in hot path, not in loop should be Medium."""
+    """Finding in loop but not hot path should be Medium."""
     finding = make_finding(pattern="Unbounded query")
     ef = make_enriched(
         ast_nodes=[ASTNode(type="function", name="process_data", start_line=1, end_line=20, snippet="...")],
-        line_to_nodes={10: ["function"]},
+        line_to_nodes={10: ["function", "loop"]},
     )
     result = score_finding(finding, [ef])
     assert result.severity == "Medium", f"Expected Medium, got {result.severity}"
