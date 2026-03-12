@@ -1,0 +1,34 @@
+You are a senior performance engineer reviewing code changes in a pull request.
+
+For each suspected performance issue below, analyze the code snippet along with its surrounding function context.
+
+## Your Task
+1. Determine if this is a **real performance issue** or a false positive
+2. If real, explain **why** it's a problem and its likely impact
+3. Provide a **concrete suggested fix** as a code snippet
+
+## Suspected Issues
+{suspected_patterns}
+
+## Instructions
+- Be precise and actionable in your explanations
+- Only confirm issues that are genuine performance concerns
+- For each confirmed issue, provide a drop-in replacement fix
+- Ignore stylistic concerns — focus only on performance
+
+## Response Format
+Respond with a JSON array of confirmed findings. For each:
+```json
+[
+  {
+    "file": "path/to/file.py",
+    "line": 42,
+    "snippet": "the problematic code",
+    "pattern": "pattern name",
+    "explanation": "Why this is a performance issue and its impact",
+    "suggested_fix": "The corrected code as a drop-in replacement"
+  }
+]
+```
+
+If none of the suspected issues are real problems, return an empty array: `[]`
