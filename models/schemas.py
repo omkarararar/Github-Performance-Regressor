@@ -6,6 +6,8 @@ class FileChange(BaseModel):
     language: str
     hunks: str
     added_lines: list[str]
+    line_numbers: list[int] = []    # actual file line numbers for each added line
+    full_source: str = ""           # complete file content (for AST parsing)
 
 class SuspectedPattern(BaseModel):
     file: str
@@ -23,8 +25,8 @@ class Finding(BaseModel):
     severity: Optional[str] = None
 
 class ASTNode(BaseModel):
-    type: str           # "function", "class", "loop", "async"
-    name: str           # e.g. "get_users", "UserModel", "for"
+    type: str
+    name: str
     start_line: int
     end_line: int
     snippet: str
@@ -34,5 +36,6 @@ class EnrichedFileChange(BaseModel):
     language: str
     hunks: str
     added_lines: list[str]
+    line_numbers: list[int] = []
     ast_nodes: list[ASTNode]
     line_to_nodes: dict[int, list[str]]

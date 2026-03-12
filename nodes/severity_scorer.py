@@ -1,66 +1,77 @@
 from models.schemas import Finding, EnrichedFileChange
+from logger import get_logger
 
+log = get_logger("severity_scorer")
 
-# Keywords that indicate a hot path (endpoint handler, API route, etc.)
+# Configurable thresholds
+HIGH_THRESHOLD = 7
+MEDIUM_THRESHOLD = 4
+
 HOT_PATH_INDICATORS = [
     "route", "endpoint", "handler", "view", "api",
     "get", "post", "put", "delete", "patch",
-    "request", "response",
+    "request", "response", "webhook", "callback",
+    "middleware", "dispatch", "serve",
 ]
 
-# Keywords that indicate pagination/limiting is present
 PAGINATION_INDICATORS = [
     "paginate", "limit", "offset", "page",
-    "slice", "[::", "[:",
+    "slice", "[::", "[:", "take", "skip",
+    "per_page", "page_size",
+]
+
+DB_CALL_PATTERNS = [
+    ".query(", ".filter(", ".find(", ".execute(",
+    ".objects.", "session.", "cursor.",
+    ".select(", ".where(", ".get_or_create(",
 ]
 
 
 def score_finding(finding: Finding, enriched_files: list[EnrichedFileChange]) -> Finding:
-    """
-    Score a single finding as High, Medium, or Low severity.
+    score, breakdown = _calculate_score(finding, enriched_files)
 
-    - High: inside a hot path (endpoint handler, unbounded loop, called every request)
-    - Medium: likely slow but depends on data size
-    - Low: code smell, unlikely to regress in practice
-    """
-    score = _calculate_score(finding, enriched_files)
-
-    if score >= 7:
+    if score >= HIGH_THRESHOLD:
         finding.severity = "High"
-    elif score >= 4:
+    elif score >= MEDIUM_THRESHOLD:
         finding.severity = "Medium"
     else:
         finding.severity = "Low"
 
+    log.info(f"{finding.severity} ({score}/10) — {finding.pattern} in {finding.file}:{finding.line} | {breakdown}")
     return finding
 
 
-def _calculate_score(finding: Finding, enriched_files: list[EnrichedFileChange]) -> int:
-    """Calculate a numeric severity score (1-10)."""
-    score = 3  # base score
+def _calculate_score(finding: Finding, enriched_files: list[EnrichedFileChange]) -> tuple[int, str]:
+    """Calculate severity score with breakdown for debugging."""
+    score = 3
+    reasons = ["base=3"]
 
-    # Check if inside a hot path
     if _is_hot_path(finding, enriched_files):
         score += 3
+        reasons.append("hot_path=+3")
 
-    # Check if inside a loop (from AST context)
     if _is_in_loop(finding, enriched_files):
         score += 2
+        reasons.append("in_loop=+2")
 
-    # Check if pagination exists nearby
     if _has_pagination(finding, enriched_files):
         score -= 2
+        reasons.append("pagination=-2")
 
-    # Patterns that are inherently more severe
-    high_severity_patterns = ["ORM call inside loop", "Blocking call in async"]
+    if _is_db_call(finding):
+        score += 1
+        reasons.append("db_call=+1")
+
+    high_severity_patterns = ["ORM call inside loop", "Blocking call in async", "SQLAlchemy query in loop"]
     if finding.pattern in high_severity_patterns:
         score += 1
+        reasons.append("severe_pattern=+1")
 
-    return max(1, min(10, score))
+    score = max(1, min(10, score))
+    return score, " | ".join(reasons)
 
 
 def _is_hot_path(finding: Finding, enriched_files: list[EnrichedFileChange]) -> bool:
-    """Check if the finding is inside an API route handler or similar hot path."""
     for ef in enriched_files:
         if ef.filename != finding.file:
             continue
@@ -73,7 +84,6 @@ def _is_hot_path(finding: Finding, enriched_files: list[EnrichedFileChange]) -> 
 
 
 def _is_in_loop(finding: Finding, enriched_files: list[EnrichedFileChange]) -> bool:
-    """Check if the finding's line is inside a loop."""
     for ef in enriched_files:
         if ef.filename != finding.file:
             continue
@@ -84,7 +94,6 @@ def _is_in_loop(finding: Finding, enriched_files: list[EnrichedFileChange]) -> b
 
 
 def _has_pagination(finding: Finding, enriched_files: list[EnrichedFileChange]) -> bool:
-    """Check if pagination/limiting exists in the same function."""
     for ef in enriched_files:
         if ef.filename != finding.file:
             continue
@@ -96,9 +105,18 @@ def _has_pagination(finding: Finding, enriched_files: list[EnrichedFileChange]) 
     return False
 
 
+def _is_db_call(finding: Finding) -> bool:
+    """Check if the finding's snippet involves a known DB call."""
+    snippet = finding.snippet.lower()
+    return any(pattern in snippet for pattern in DB_CALL_PATTERNS)
+
+
 def score_all(findings: list[Finding], enriched_files: list[EnrichedFileChange]) -> list[Finding]:
-    """
-    Main entry point for Node 5.
-    Score all findings and return them with severity attached.
-    """
-    return [score_finding(f, enriched_files) for f in findings]
+    """Main entry point for Node 5."""
+    log.info(f"Scoring {len(findings)} findings")
+    scored = [score_finding(f, enriched_files) for f in findings]
+    high = sum(1 for f in scored if f.severity == "High")
+    med = sum(1 for f in scored if f.severity == "Medium")
+    low = sum(1 for f in scored if f.severity == "Low")
+    log.info(f"Node 5 complete: {high} High, {med} Medium, {low} Low")
+    return scored

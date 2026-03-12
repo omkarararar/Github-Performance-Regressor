@@ -1,10 +1,10 @@
-from nodes.severity_scorer import score_finding, score_all
+from nodes.severity_scorer import score_finding, score_all, _is_db_call
 from models.schemas import Finding, EnrichedFileChange, ASTNode
 
 
-def make_finding(file="app.py", line=10, pattern="ORM call inside loop"):
+def make_finding(file="app.py", line=10, pattern="ORM call inside loop", snippet="db.query()"):
     return Finding(
-        file=file, line=line, snippet="db.query()",
+        file=file, line=line, snippet=snippet,
         pattern=pattern, explanation="test", suggested_fix="fix",
     )
 
@@ -17,7 +17,6 @@ def make_enriched(filename="app.py", ast_nodes=None, line_to_nodes=None):
 
 
 def test_high_severity():
-    """Finding in a hot path + loop should be High."""
     finding = make_finding(pattern="ORM call inside loop")
     ef = make_enriched(
         ast_nodes=[ASTNode(type="function", name="get_api_handler", start_line=1, end_line=20, snippet="...")],
@@ -29,7 +28,6 @@ def test_high_severity():
 
 
 def test_medium_severity():
-    """Finding in loop but not hot path should be Medium."""
     finding = make_finding(pattern="Unbounded query")
     ef = make_enriched(
         ast_nodes=[ASTNode(type="function", name="process_data", start_line=1, end_line=20, snippet="...")],
@@ -41,7 +39,6 @@ def test_medium_severity():
 
 
 def test_low_severity_with_pagination():
-    """Finding with pagination nearby should be Low."""
     finding = make_finding(pattern="Unbounded query")
     ef = make_enriched(
         ast_nodes=[ASTNode(type="function", name="helper", start_line=1, end_line=20, snippet="results = db.all().paginate(page=1)")],
@@ -52,8 +49,14 @@ def test_low_severity_with_pagination():
     print("✅ Low severity with pagination scored correctly!")
 
 
+def test_db_call_detection():
+    assert _is_db_call(make_finding(snippet="session.query(User)")) == True
+    assert _is_db_call(make_finding(snippet="cursor.execute(sql)")) == True
+    assert _is_db_call(make_finding(snippet="x = 1 + 2")) == False
+    print("✅ DB call detection works!")
+
+
 def test_score_all():
-    """score_all should process multiple findings."""
     findings = [make_finding(), make_finding(line=20)]
     ef = make_enriched(line_to_nodes={10: ["function"], 20: ["function"]})
     results = score_all(findings, [ef])
@@ -66,5 +69,6 @@ if __name__ == "__main__":
     test_high_severity()
     test_medium_severity()
     test_low_severity_with_pagination()
+    test_db_call_detection()
     test_score_all()
     print("\n🎉 All Node 5 tests passed!")

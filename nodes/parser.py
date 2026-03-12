@@ -2,7 +2,11 @@ from tree_sitter import Parser, Language
 import tree_sitter_python
 import tree_sitter_javascript
 from models.schemas import FileChange, EnrichedFileChange, ASTNode
+from logger import get_logger
 
+log = get_logger("parser")
+
+MAX_FILE_SIZE = 500_000  # 500KB
 
 LANGUAGE_MODULES = {
     "python": tree_sitter_python.language(),
@@ -26,6 +30,7 @@ NODE_TYPES = {
 
 def get_parser(language: str) -> Parser | None:
     if language not in LANGUAGE_MODULES:
+        log.debug(f"No Tree-sitter grammar for language: {language}")
         return None
     parser = Parser()
     parser.language = Language(LANGUAGE_MODULES[language])
@@ -33,11 +38,23 @@ def get_parser(language: str) -> Parser | None:
 
 
 def extract_ast_nodes(source_code: str, language: str) -> list[ASTNode]:
+    if not source_code or not source_code.strip():
+        return []
+
+    if len(source_code) > MAX_FILE_SIZE:
+        log.warning(f"Source code too large ({len(source_code)} bytes), skipping AST extraction")
+        return []
+
     parser = get_parser(language)
     if not parser:
         return []
 
-    tree = parser.parse(bytes(source_code, "utf8"))
+    try:
+        tree = parser.parse(bytes(source_code, "utf8"))
+    except Exception as e:
+        log.error(f"Tree-sitter parse failed: {e}")
+        return []
+
     node_types = NODE_TYPES.get(language, {})
 
     type_lookup = {}
@@ -47,11 +64,11 @@ def extract_ast_nodes(source_code: str, language: str) -> list[ASTNode]:
 
     results = []
     _walk_tree(tree.root_node, type_lookup, source_code, results)
+    log.info(f"Extracted {len(results)} AST nodes for {language} source")
     return results
 
 
 def _is_async(node) -> bool:
-    """Check if a function_definition node has an 'async' keyword."""
     for child in node.children:
         if child.type == "async":
             return True
@@ -66,7 +83,6 @@ def _walk_tree(node, type_lookup: dict, source: str, results: list[ASTNode]):
 
         name = _get_node_name(node) or node.type
 
-        # Detect async functions (tree-sitter-python uses function_definition + async keyword child)
         category = type_lookup[node.type]
         if node.type == "function_definition" and _is_async(node):
             category = "async"
@@ -100,8 +116,17 @@ def build_line_map(ast_nodes: list[ASTNode]) -> dict[int, list[str]]:
     return line_map
 
 
-def enrich_file(file_change: FileChange, source_code: str) -> EnrichedFileChange:
-    ast_nodes = extract_ast_nodes(source_code, file_change.language)
+def enrich_file(file_change: FileChange, source_code: str = "") -> EnrichedFileChange:
+    """
+    Main entry point for Node 2.
+    Uses full_source from FileChange if available, falls back to provided source_code.
+    """
+    code = file_change.full_source or source_code
+    if not code:
+        log.warning(f"No source code for {file_change.filename}, using added_lines as fallback")
+        code = "\n".join(file_change.added_lines)
+
+    ast_nodes = extract_ast_nodes(code, file_change.language)
     line_map = build_line_map(ast_nodes)
 
     return EnrichedFileChange(
@@ -109,6 +134,7 @@ def enrich_file(file_change: FileChange, source_code: str) -> EnrichedFileChange
         language=file_change.language,
         hunks=file_change.hunks,
         added_lines=file_change.added_lines,
+        line_numbers=file_change.line_numbers,
         ast_nodes=ast_nodes,
         line_to_nodes=line_map,
     )
