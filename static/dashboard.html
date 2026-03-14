@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Regressor Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --accent: #58a6ff;
+            --red: #f85149;
+            --yellow: #d29922;
+            --green: #3fb950;
+            --purple: #bc8cff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.5;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        select, button {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 6px 12px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        select:hover, button:hover {
+            border-color: var(--accent);
+        }
+
+        button.primary {
+            background: #238636;
+            border-color: #2ea043;
+        }
+
+        button.primary:hover { background: #2ea043; }
+
+        .timestamp {
+            color: var(--text-secondary);
+            font-size: 12px;
+        }
+
+        .container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* KPI Cards */
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .kpi-card .label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .kpi-card .value {
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .kpi-card .sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 4px;
+        }
+
+        .pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-right: 4px;
+        }
+
+        .pill-high { background: rgba(248,81,73,0.2); color: var(--red); }
+        .pill-med  { background: rgba(210,153,34,0.2); color: var(--yellow); }
+        .pill-low  { background: rgba(63,185,80,0.2); color: var(--green); }
+
+        /* Charts */
+        .chart-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .chart-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+        }
+
+        .chart-card h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        /* Tables */
+        .section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 24px;
+        }
+
+        .section h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            text-align: left;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        tr:last-child td { border-bottom: none; }
+
+        tr.hot-row { background: rgba(248,81,73,0.06); }
+
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+
+        a:hover { text-decoration: underline; }
+
+        .debt-high { color: var(--red); font-weight: 600; }
+        .debt-med  { color: var(--yellow); font-weight: 600; }
+        .debt-low  { color: var(--green); font-weight: 600; }
+
+        /* Chronic offenders */
+        .offender-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .offender-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            border-left: 3px solid var(--yellow);
+        }
+
+        .offender-item .badge {
+            background: rgba(210,153,34,0.2);
+            color: var(--yellow);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .offender-item code {
+            font-family: monospace;
+            color: var(--text-primary);
+        }
+
+        /* Loading & Empty */
+        .loading {
+            display: flex;
+            justify-content: center;
+            padding: 60px;
+        }
+
+        .spinner {
+            width: 32px;
+            height: 32px;
+            border: 3px solid var(--border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-secondary);
+        }
+
+        .empty-state .icon { font-size: 32px; margin-bottom: 8px; }
+
+        /* Responsive */
+        @media (max-width: 800px) {
+            .kpi-row  { grid-template-columns: repeat(2, 1fr); }
+            .chart-row { grid-template-columns: 1fr; }
+        }
+
+        @media (max-width: 500px) {
+            .kpi-row { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>🔬 Performance Regressor Dashboard</h1>
+    <div class="header-controls">
+        <select id="repoSelect">
+            <option value="">Select a repository...</option>
+        </select>
+        <button class="primary" onclick="refresh()">↻ Refresh</button>
+        <span class="timestamp" id="lastUpdated"></span>
+    </div>
+</div>
+
+<div class="container" id="content">
+    <div class="empty-state">
+        <div class="icon">📊</div>
+        <p>Select a repository to view performance analytics</p>
+    </div>
+</div>
+
+<script>
+const API_BASE = '/dashboard';
+const API_KEY = '';  // Set if DASHBOARD_API_KEY is configured
+
+function headers() {
+    const h = { 'Content-Type': 'application/json' };
+    if (API_KEY) h['X-API-Key'] = API_KEY;
+    return h;
+}
+
+async function fetchJson(url) {
+    const res = await fetch(url, { headers: headers() });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    return res.json();
+}
+
+// ── Init ──────────────────────────────────────────────────
+
+async function init() {
+    try {
+        const data = await fetchJson(`${API_BASE}/repos`);
+        const sel = document.getElementById('repoSelect');
+        (data.repos || []).forEach(r => {
+            const opt = document.createElement('option');
+            opt.value = r.full_name;
+            opt.textContent = `${r.full_name} (${r.pr_count} PRs)`;
+            sel.appendChild(opt);
+        });
+    } catch (e) {
+        console.error('Failed to load repos:', e);
+    }
+}
+
+document.getElementById('repoSelect').addEventListener('change', e => {
+    if (e.target.value) loadDashboard(e.target.value);
+});
+
+function refresh() {
+    const repo = document.getElementById('repoSelect').value;
+    if (repo) loadDashboard(repo);
+}
+
+// ── Load Dashboard ────────────────────────────────────────
+
+async function loadDashboard(repoFullName) {
+    const content = document.getElementById('content');
+    content.innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+
+    const [owner, repo] = repoFullName.split('/');
+    const base = `${API_BASE}/repo/${owner}/${repo}`;
+
+    try {
+        const [overview, trends, hotspots, history, patterns, offenders] =
+            await Promise.all([
+                fetchJson(`${base}/overview`),
+                fetchJson(`${base}/trends?weeks=12`),
+                fetchJson(`${base}/hotspots?limit=10`),
+                fetchJson(`${base}/history?limit=20`),
+                fetchJson(`${base}/patterns`),
+                fetchJson(`${base}/chronic-offenders`),
+            ]);
+
+        document.getElementById('lastUpdated').textContent =
+            'Updated: ' + new Date().toLocaleString();
+
+        render(repoFullName, overview, trends.trends || [],
+               hotspots.hotspots || [], history.history || [],
+               patterns.patterns || [], offenders.chronic_offenders || []);
+    } catch (e) {
+        content.innerHTML = `<div class="empty-state"><div class="icon">⚠️</div>
+            <p>Failed to load data: ${e.message}</p></div>`;
+    }
+}
+
+// ── Render ─────────────────────────────────────────────────
+
+function render(repoName, ov, trends, hotspots, history, patterns, offenders) {
+    const c = document.getElementById('content');
+    c.innerHTML = '';
+
+    // KPI Cards
+    const kpiHtml = `
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="label">Total PRs Analyzed</div>
+            <div class="value">${ov.total_prs || 0}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Total Findings</div>
+            <div class="value">${ov.total_findings || 0}</div>
+            <div class="sub">
+                <span class="pill pill-high">${ov.high_count || 0} High</span>
+                <span class="pill pill-med">${ov.medium_count || 0} Med</span>
+                <span class="pill pill-low">${ov.low_count || 0} Low</span>
+            </div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Avg Debt Score</div>
+            <div class="value">${(ov.avg_debt_score || 0).toFixed(1)}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="label">Cross-File Finding %</div>
+            <div class="value">${(ov.cross_file_finding_pct || 0).toFixed(1)}%</div>
+        </div>
+    </div>`;
+    c.insertAdjacentHTML('beforeend', kpiHtml);
+
+    // Charts
+    c.insertAdjacentHTML('beforeend', `
+    <div class="chart-row">
+        <div class="chart-card">
+            <h3>Pattern Trends Over Time</h3>
+            <div class="chart-wrapper"><canvas id="trendChart"></canvas></div>
+        </div>
+        <div class="chart-card">
+            <h3>Severity Distribution</h3>
+            <div class="chart-wrapper"><canvas id="sevChart"></canvas></div>
+        </div>
+    </div>`);
+
+    renderTrendChart(trends);
+    renderSeverityChart(ov);
+
+    // Hotspots table
+    c.insertAdjacentHTML('beforeend', renderHotspotsSection(repoName, hotspots));
+
+    // PR History table
+    c.insertAdjacentHTML('beforeend', renderHistorySection(repoName, history));
+
+    // Chronic Offenders
+    c.insertAdjacentHTML('beforeend', renderOffendersSection(offenders));
+}
+
+// ── Charts ─────────────────────────────────────────────────
+
+function renderTrendChart(trends) {
+    const canvas = document.getElementById('trendChart');
+    if (!canvas) return;
+    if (!trends.length) {
+        canvas.parentElement.innerHTML = '<div class="empty-state"><p>No trend data yet</p></div>';
+        return;
+    }
+
+    // Group by week, stack by pattern
+    const weeks = [...new Set(trends.map(t => t.week))].sort();
+    const patternTypes = [...new Set(trends.map(t => t.pattern_type))];
+    const colors = ['#58a6ff','#f85149','#d29922','#3fb950','#bc8cff','#f778ba','#79c0ff'];
+
+    const datasets = patternTypes.map((pt, i) => ({
+        label: pt,
+        data: weeks.map(w => {
+            const match = trends.find(t => t.week === w && t.pattern_type === pt);
+            return match ? match.count : 0;
+        }),
+        backgroundColor: colors[i % colors.length] + '99',
+        borderColor: colors[i % colors.length],
+        borderWidth: 1,
+    }));
+
+    new Chart(canvas, {
+        type: 'bar',
+        data: { labels: weeks, datasets },
+        options: {
+            responsive: true,
+            animation: { duration: 800 },
+            plugins: {
+                legend: { labels: { color: '#8b949e', font: { size: 11 } } }
+            },
+            scales: {
+                x: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: '#21262d' } },
+                y: { stacked: true, ticks: { color: '#8b949e' }, grid: { color: '#21262d' },
+                     title: { display: true, text: 'Findings', color: '#8b949e' } },
+            },
+        },
+    });
+}
+
+function renderSeverityChart(ov) {
+    const canvas = document.getElementById('sevChart');
+    if (!canvas) return;
+    const total = (ov.high_count || 0) + (ov.medium_count || 0) + (ov.low_count || 0);
+    if (!total) {
+        canvas.parentElement.innerHTML = '<div class="empty-state"><p>No findings yet</p></div>';
+        return;
+    }
+
+    new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+            labels: ['High', 'Medium', 'Low'],
+            datasets: [{
+                data: [ov.high_count || 0, ov.medium_count || 0, ov.low_count || 0],
+                backgroundColor: ['#f85149', '#d29922', '#3fb950'],
+                borderColor: '#161b22',
+                borderWidth: 3,
+            }],
+        },
+        options: {
+            responsive: true,
+            animation: { duration: 800 },
+            plugins: {
+                legend: { labels: { color: '#8b949e', font: { size: 11 } } },
+                tooltip: { enabled: true },
+            },
+            cutout: '65%',
+        },
+        plugins: [{
+            id: 'centerText',
+            afterDraw(chart) {
+                const { ctx, width, height } = chart;
+                ctx.save();
+                ctx.font = 'bold 24px -apple-system, sans-serif';
+                ctx.fillStyle = '#e6edf3';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(total.toString(), width / 2, height / 2);
+                ctx.restore();
+            }
+        }],
+    });
+}
+
+// ── Tables ─────────────────────────────────────────────────
+
+function renderHotspotsSection(repoName, hotspots) {
+    if (!hotspots.length) {
+        return `<div class="section"><h3>🔥 File Hotspots</h3>
+            <div class="empty-state"><p>No hotspot data yet</p></div></div>`;
+    }
+    let rows = hotspots.map((h, i) => {
+        const cls = i < 3 ? ' class="hot-row"' : '';
+        const prLink = h.last_seen_pr
+            ? `<a href="https://github.com/${repoName}/pull/${h.last_seen_pr}" target="_blank">#${h.last_seen_pr}</a>`
+            : '—';
+        return `<tr${cls}>
+            <td><code>${h.file_path}</code></td>
+            <td>${h.total_findings}</td>
+            <td>${h.high_count}</td>
+            <td>${h.avg_severity_score}</td>
+            <td>${h.most_common_pattern || '—'}</td>
+            <td>${prLink}</td>
+        </tr>`;
+    }).join('');
+
+    return `<div class="section"><h3>🔥 File Hotspots</h3>
+        <table>
+            <thead><tr>
+                <th>File Path</th><th>Total</th><th>High</th>
+                <th>Avg Severity</th><th>Top Pattern</th><th>Last PR</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`;
+}
+
+function renderHistorySection(repoName, history) {
+    if (!history.length) {
+        return `<div class="section"><h3>📋 Recent PR History</h3>
+            <div class="empty-state"><p>No PR history yet</p></div></div>`;
+    }
+    let rows = history.map(pr => {
+        let debtCls = 'debt-low';
+        if (pr.debt_score > 20) debtCls = 'debt-high';
+        else if (pr.debt_score >= 10) debtCls = 'debt-med';
+
+        const prLink = `<a href="https://github.com/${repoName}/pull/${pr.pr_number}" target="_blank">#${pr.pr_number}</a>`;
+        const dateStr = pr.analyzed_at ? new Date(pr.analyzed_at).toLocaleDateString() : '—';
+
+        return `<tr>
+            <td>${prLink}</td>
+            <td>${pr.title || '—'}</td>
+            <td>${pr.author || '—'}</td>
+            <td>${dateStr}</td>
+            <td>${pr.finding_count}</td>
+            <td>${pr.high_count}</td>
+            <td class="${debtCls}">${pr.debt_score}</td>
+        </tr>`;
+    }).join('');
+
+    return `<div class="section"><h3>📋 Recent PR History</h3>
+        <table>
+            <thead><tr>
+                <th>PR</th><th>Title</th><th>Author</th>
+                <th>Analyzed</th><th>Findings</th><th>High</th><th>Debt Score</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+        </table></div>`;
+}
+
+function renderOffendersSection(offenders) {
+    if (!offenders.length) {
+        return `<div class="section"><h3>⚠️ Chronic Offenders</h3>
+            <div class="empty-state"><p>No chronic offenders detected yet</p></div></div>`;
+    }
+    let items = offenders.map(o =>
+        `<div class="offender-item">
+            <span>⚠️</span>
+            <code>${o.file_path}</code>
+            <span class="badge">${o.pr_count} PRs</span>
+        </div>`
+    ).join('');
+
+    return `<div class="section"><h3>⚠️ Chronic Offenders</h3>
+        <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">
+            Files appearing in findings across 3+ separate PRs
+        </p>
+        <div class="offender-list">${items}</div></div>`;
+}
+
+// ── Boot ───────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

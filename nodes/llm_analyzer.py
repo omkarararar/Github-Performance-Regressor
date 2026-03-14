@@ -19,6 +19,7 @@ def load_prompt_template() -> str:
 
 
 def format_suspects(suspects: list[SuspectedPattern]) -> str:
+    """Format suspected patterns into readable text for the Claude prompt."""
     lines = []
     for i, s in enumerate(suspects, 1):
         lines.append(f"### Issue {i}")
@@ -26,6 +27,10 @@ def format_suspects(suspects: list[SuspectedPattern]) -> str:
         lines.append(f"- **Line:** {s.line}")
         lines.append(f"- **Pattern:** {s.suspected_pattern}")
         lines.append(f"- **Code:** `{s.snippet}`")
+        # Include call chain if available (cross-file context)
+        if hasattr(s, 'call_chain') and s.call_chain:
+            lines.append(f"- **Call Chain:** {' → '.join(s.call_chain)}")
+            lines.append(f"- **Cross-File:** This issue was detected via cross-file call graph analysis")
         lines.append("")
     return "\n".join(lines)
 

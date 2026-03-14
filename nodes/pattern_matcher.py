@@ -85,10 +85,26 @@ def _get_nearby_lines(lines: list[str], index: int, window: int = 3) -> str:
     return " ".join(lines[start:end])
 
 
-def _check_line_context(line_number: int, required_context: list[str], line_to_nodes: dict[int, list[str]]) -> bool:
+def _check_line_context(
+    line_number: int,
+    required_context: list[str],
+    line_to_nodes: dict[int, list[str]],
+    called_from_loop: set[int] | None = None,
+    called_from_async: set[int] | None = None,
+) -> bool:
+    """Check if a line has the required AST context, including cross-file call graph data."""
     if not required_context:
         return True
-    node_types = line_to_nodes.get(line_number, [])
+    node_types = list(line_to_nodes.get(line_number, []))
+
+    # Augment with cross-file context from call graph
+    if called_from_loop and line_number in called_from_loop:
+        if "loop" not in node_types:
+            node_types.append("loop")
+    if called_from_async and line_number in called_from_async:
+        if "async" not in node_types:
+            node_types.append("async")
+
     return all(ctx in node_types for ctx in required_context)
 
 
@@ -119,7 +135,12 @@ def match_patterns(enriched_file: EnrichedFileChange) -> list[SuspectedPattern]:
             if not re.search(pattern["regex"], clean_line):
                 continue
 
-            if not _check_line_context(real_line, pattern.get("requires_context", []), enriched_file.line_to_nodes):
+            if not _check_line_context(
+                real_line, pattern.get("requires_context", []),
+                enriched_file.line_to_nodes,
+                called_from_loop=enriched_file.called_from_loop,
+                called_from_async=enriched_file.called_from_async,
+            ):
                 continue
 
             if "exclude_if_nearby" in pattern:
